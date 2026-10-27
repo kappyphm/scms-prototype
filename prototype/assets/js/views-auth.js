@@ -188,7 +188,7 @@
         '<div class="kiosk-clock"><div class="time" data-clock-large>--:--:--</div><div class="date" data-clock-date></div>' +
         '<div class="server-note">Đồng hồ hệ thống · máy KIOSK-D1-01 · kết nối ổn định</div></div>' +
         '<div class="kiosk-reader"><div class="kiosk-reader__status"><span class="kiosk-reader__dot"></span>Đầu đọc RFID/QR sẵn sàng</div>' +
-        '<p>Quẹt thẻ nhân viên hoặc nhập PIN 4 số để chấm công. Mỗi thao tác hoàn tất dưới 0,5 giây.</p>' +
+        '<p>Quẹt thẻ nhân viên để ghi nhận check-in/check-out ngay (BR-06), hoặc nhập PIN 4 số để chấm công. Mỗi thao tác hoàn tất dưới 0,5 giây.</p>' +
         '<button class="btn" data-action="kiosk-scan">Giả lập quẹt thẻ</button></div></section>' +
         '<section class="kiosk-right"><div class="kiosk-panel">' +
         '<div class="page-code mb-8">SCR-02 <b>ATTENDANCE KIOSK</b></div>' +
@@ -238,8 +238,9 @@
         NS.state.kioskEmployeeId = target.id;
         NS.state.kioskPin = "";
         NS.state.kioskResult = null;
-        NS.refresh();
-        NS.toast("Đã đọc thẻ " + target.card + " · " + target.name);
+        // BR-06: a valid card swipe records check-in (first of day) or
+        // check-out (when a check-in already exists) immediately.
+        recordAttendance(target, "RFID");
       },
     },
   });
@@ -284,6 +285,10 @@
     }
     NS.state.kioskAttempts[emp.id] = { count: 0, lockedUntil: 0 };
     NS.state.kioskPin = "";
+    recordAttendance(emp, "PIN");
+  }
+
+  function recordAttendance(emp, method) {
     const att = todayAttendance(emp.id);
     const scheduleCode = NS.calc.schedule(emp.id, NS.today());
     if (!scheduleCode && !att) {
@@ -302,10 +307,22 @@
       return;
     }
     if (att && att.checkIn && !att.checkOut) {
+      // BR-07: at least 15 minutes between check-in and check-out, to
+      // prevent accidental duplicate swipes.
+      const elapsed = NS.minutesBetween(att.checkIn, now);
+      if (elapsed < 15) {
+        NS.state.kioskResult = {
+          kind: "error",
+          title: "Chưa đủ 15 phút để check-out",
+          lines: [["Nhân viên", emp.name + " · " + emp.code], ["Check-in", NS.fmt.time(att.checkIn)], ["Đã trôi qua", elapsed + " phút · cần thêm " + (15 - elapsed) + " phút"]],
+        };
+        NS.refresh();
+        return;
+      }
       att.checkOut = now;
       att.hours = Math.round((NS.minutesBetween(att.checkIn, now) / 60) * 100) / 100;
       att.status = "on_time";
-      att.note = "Check-out qua Kiosk";
+      att.note = "Check-out qua Kiosk · " + method;
       NS.addAudit("Check-out", "Chấm công", null, { employee: emp.name, at: now });
       NS.saveData();
       NS.state.kioskResult = {
@@ -327,12 +344,12 @@
         workDate: NS.today(),
         checkIn: now,
         checkOut: null,
-        method: "PIN",
+        method: method,
         status: "on_time",
         minutesLate: late,
         minutesEarly: 0,
         hours: null,
-        note: "Check-in qua Kiosk",
+        note: "Check-in qua Kiosk · " + method,
       });
       NS.addAudit("Check-in", "Chấm công", null, { employee: emp.name, at: now });
       NS.saveData();
@@ -348,7 +365,7 @@
     att.checkIn = now;
     att.checkOut = null;
     att.status = "on_time";
-    att.note = "Check-in qua Kiosk";
+    att.note = "Check-in qua Kiosk · " + method;
     NS.addAudit("Check-in", "Chấm công", null, { employee: emp.name, at: now });
     NS.saveData();
     NS.state.kioskResult = {
