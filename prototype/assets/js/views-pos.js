@@ -340,7 +340,7 @@
           '<div class="pay-box"><div class="pay-tabs"><button class="pay-tab ' + (method === "cash" ? "active" : "") + '" data-action="checkout-method" data-method="cash">Tiền mặt</button><button class="pay-tab ' + (method === "vietqr" ? "active" : "") + '" data-action="checkout-method" data-method="vietqr">VietQR / SePay</button></div>' +
           (method === "cash" ? renderCash(totals, cash, change) : renderQr(totals)) +
           '</div></div>',
-        footer: '<span class="task-footer__note">Thanh toán sẽ ghi nhận vào ca quỹ hiện tại và tạo audit log.</span><div class="flex gap-8"><a class="btn" href="#/pos">Quay lại</a><button class="btn btn-primary" data-action="' + (method === "cash" ? "checkout-confirm-cash" : "checkout-confirm-qr") + '">' + (method === "cash" ? "Xác nhận & in bill" : "Tôi đã nhận chuyển khoản") + '</button></div>',
+        footer: '<span class="task-footer__note">Thanh toán sẽ ghi nhận vào ca quỹ hiện tại và tạo audit log.' + (method === "cash" ? ' · F10 xác nhận thanh toán tiền mặt.' : '') + '</span><div class="flex gap-8"><a class="btn" href="#/pos">Quay lại</a><button class="btn btn-primary" data-action="' + (method === "cash" ? "checkout-confirm-cash" : "checkout-confirm-qr") + '">' + (method === "cash" ? "Xác nhận & in bill" : "Tôi đã nhận chuyển khoản") + '</button></div>',
       });
     },
     actions: {
