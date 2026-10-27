@@ -266,7 +266,7 @@
 
   function makeOrder(branch, date, hourLimit, forcedStatus, forcedMethod) {
     orderCounter++;
-    const code = "ORD-" + date.slice(2).replace(/-/g, "") + "-" + String(orderCounter).padStart(3, "0");
+    const code = "CAFE-" + date.slice(2).replace(/-/g, "") + "-" + String(orderCounter).padStart(3, "0");
     const cashier = cashiersFor(branch.id)[0] || employees.find((e) => e.branchId === branch.id && e.role === "Branch Manager");
     const hour = int(6, hourLimit);
     const minute = int(0, 59);
@@ -348,7 +348,7 @@
         bank: paymentBanks[orderCounter % paymentBanks.length],
         account: "0909 123 456",
         paidAt,
-        qrContent: "CAFE" + code,
+        qrContent: code,
         qrExpiredAt: addMinutes(createdAt, 5),
       },
       refunds: [],
@@ -509,7 +509,7 @@
 
   /* ---------------- Approvals ---------------- */
   const approvals = [
-    { id: "AP-261020-001", type: "refund", branchId: "D1", createdAt: addMinutes(iso(TODAY, 13, 10), 0), requestedBy: "Nguyễn Mai Linh", amount: 180000, reason: "Khách phản hồi món bị sai size, yêu cầu hoàn tiền.", status: "pending", relatedId: "ORD-261014-001", note: "Trong ngưỡng 2.000.000 nhưng khách yêu cầu COO xác nhận theo cấu hình demo.", details: "Hoàn tiền mặt từ két, đơn gốc đã thanh toán VietQR." },
+    { id: "AP-261020-001", type: "refund", branchId: "D1", createdAt: addMinutes(iso(TODAY, 13, 10), 0), requestedBy: "Nguyễn Mai Linh", amount: 180000, reason: "Khách phản hồi món bị sai size, yêu cầu hoàn tiền.", status: "pending", relatedId: "CAFE-261014-001", note: "Trong ngưỡng 2.000.000 nhưng khách yêu cầu COO xác nhận theo cấu hình demo.", details: "Hoàn tiền mặt từ két, đơn gốc đã thanh toán VietQR." },
     { id: "AP-261020-002", type: "disposal", branchId: "D1", createdAt: iso(TODAY, 16, 22), requestedBy: "Nguyễn Thu Trang", amount: 36000, reason: "Tiêu hủy 3 kg đá viên do tan, ảnh hưởng chất lượng.", status: "pending", relatedId: stockTransactions[4].id, note: "Giá trị vượt ngưỡng tiêu hủy của Branch Manager.", details: "Tồn kho sẽ giảm 3.000 g đá viên sau khi duyệt." },
     { id: "AP-261020-003", type: "adjustment", branchId: "D3", createdAt: iso(TODAY, 17, 5), requestedBy: "Lê Hoàng Anh", amount: 125000, reason: "Chênh lệch kiểm kê matcha: thiếu 200 g.", status: "pending", relatedId: "KK-261020-002", note: "Cần COO xác nhận do vượt ngưỡng điều chỉnh.", details: "Điều chỉnh giảm 200 g matcha." },
     { id: "AP-261019-004", type: "cash_variance", branchId: "D1", createdAt: iso(addDays(TODAY, -1), 23, 15), requestedBy: "Nguyễn Mai Linh", amount: 50000, reason: "Thiếu 50.000 khi đóng ca tối 19/10.", status: "approved", relatedId: "SH-261019-09", note: "Đã duyệt bởi COO.", details: "Đã ghi nhận giải trình." },
@@ -638,14 +638,14 @@
   }
   log(iso(TODAY, 6, 1), "Nguyễn Thu Trang", "Branch Manager", "D1", "Login", "Phiên đăng nhập", null, { result: "success", device: "POS-D1-01" });
   log(iso(TODAY, 6, 2), "Nguyễn Mai Linh", "Cashier", "D1", "Mở ca", "Ca quỹ", null, { shift: "SH-261020-01", openingCash: 500000 });
-  log(iso(TODAY, 6, 35), "Nguyễn Mai Linh", "Cashier", "D1", "Áp dụng voucher", "Đơn hàng", null, { voucher: "GIAM10", order: "ORD-261020-001" });
+  log(iso(TODAY, 6, 35), "Nguyễn Mai Linh", "Cashier", "D1", "Áp dụng voucher", "Đơn hàng", null, { voucher: "GIAM10", order: "CAFE-261020-001" });
   log(iso(TODAY, 9, 12), "Lê Anh Tuấn", "COO", "D1", "Đồng bộ cấu hình", "Chain Sync", null, { version: "2026.10.20-01", packages: ["Menu & giá", "BOM", "Khuyến mãi"], branches: 8 });
   log(iso(TODAY, 10, 8), "Lê Anh Tuấn", "COO", "D1", "Sửa giá món", "Sản phẩm", { product: "Trà đào cam sả", size: "L", price: 47000 }, { product: "Trà đào cam sả", size: "L", price: 49000 });
   log(iso(TODAY, 10, 30), "Nguyễn Mai Linh", "Cashier", "D1", "Thu tiền mặt", "Ca quỹ", null, { type: "cash_in", amount: 1000000, reason: "Bổ sung quỹ tiền mặt" });
   log(iso(TODAY, 11, 15), "Nguyễn Mai Linh", "Cashier", "D1", "Chi tiền mặt", "Ca quỹ", null, { type: "cash_out", amount: 120000, reason: "Mua đá viên bổ sung" });
   log(iso(TODAY, 11, 52), "Nguyễn Thu Trang", "Branch Manager", "D1", "Sửa BOM", "Recipe", { product: "Cà phê sữa đá", size: "M", coffee: 17 }, { product: "Cà phê sữa đá", size: "M", coffee: 18 });
-  log(iso(TODAY, 13, 10), "Nguyễn Mai Linh", "Cashier", "D1", "Yêu cầu hoàn tiền", "Đơn hàng", null, { order: "ORD-261014-001", amount: 180000 });
-  log(iso(TODAY, 13, 42), "Nguyễn Thu Trang", "Branch Manager", "D1", "Hủy đơn", "Đơn hàng", { order: "ORD-261020-006", status: "pending" }, { order: "ORD-261020-006", status: "cancelled" });
+  log(iso(TODAY, 13, 10), "Nguyễn Mai Linh", "Cashier", "D1", "Yêu cầu hoàn tiền", "Đơn hàng", null, { order: "CAFE-261014-001", amount: 180000 });
+  log(iso(TODAY, 13, 42), "Nguyễn Thu Trang", "Branch Manager", "D1", "Hủy đơn", "Đơn hàng", { order: "CAFE-261020-006", status: "pending" }, { order: "CAFE-261020-006", status: "cancelled" });
   log(iso(TODAY, 14, 5), "Nguyễn Thu Trang", "Branch Manager", "D1", "Điều chỉnh công", "Chấm công", { employee: "Nguyễn Mai Linh", checkIn: "06:12:00" }, { employee: "Nguyễn Mai Linh", checkIn: "06:00:00", reason: "Lỗi đầu đọc thẻ" });
   log(iso(TODAY, 16, 22), "Nguyễn Thu Trang", "Branch Manager", "D1", "Tiêu hủy nguyên liệu", "Kho", null, { ingredient: "Đá viên", qty: 3000, reason: "Đá tan" });
   log(iso(TODAY, 17, 35), "Lê Anh Tuấn", "COO", "D1", "Gán quyền", "Phân quyền", { role: "Cashier", screen: "Hoàn tiền", approve: false }, { role: "Cashier", screen: "Hoàn tiền", approve: true });

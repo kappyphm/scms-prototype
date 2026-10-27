@@ -9,7 +9,7 @@
 
   function nextOrderCode() {
     const dateKey = NS.today().slice(2).replace(/-/g, "");
-    const prefix = "ORD-" + dateKey + "-";
+    const prefix = "CAFE-" + dateKey + "-";
     let max = 0;
     NS.data.orders.forEach((o) => {
       if (o.code && o.code.indexOf(prefix) === 0) {
@@ -411,7 +411,7 @@
 
   function renderQr(totals) {
     const code = nextOrderCode();
-    const content = "CAFE" + code;
+    const content = code; // Ma don da bat dau bang CAFE, khong them tien to lan nua.
     return '<div class="qr-box">' + NS.ui.qrSvg(content) +
       '<div class="qr-meta"><strong>' + NS.fmt.currency(totals.total) + '</strong><span>Nội dung: ' + esc(content) + '</span><span>Ngân hàng: ' + esc(NS.data.settings.bank.name) + ' · ' + esc(NS.data.settings.bank.accountNumber) + '</span><span>Hết hạn sau 05:00</span></div></div>' +
       '<div class="notice notice--warn mt-12"><span class="notice__icon">!</span><div><strong>Đang chờ webhook SePay.</strong> Đây là mô phỏng. Chọn “Webhook thành công” để xác nhận thanh toán.</div></div>' +
@@ -462,7 +462,7 @@
       method: "vietqr", amount: totals.total, status: "completed", receivedAmount: totals.total,
       reference: "SP" + String(Date.now()).slice(-7), bank: NS.data.settings.bank.name,
       account: NS.data.settings.bank.accountNumber, paidAt: now,
-      qrContent: "CAFE" + code, qrExpiredAt: NS.dateOnly(now) + "T23:59:59",
+      qrContent: code, qrExpiredAt: NS.dateOnly(now) + "T23:59:59",
     };
     const order = {
       id: code, code, branchId: NS.state.branchId, branchName: NS.branch().name,
