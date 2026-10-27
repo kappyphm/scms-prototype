@@ -13,11 +13,14 @@
   NS.view("settings", {
     roles: NS.roles.settings,
     render(ctx) {
-      const tab = ctx.query.tab || "thresholds";
+      // SRS 3.1.3: TAB-09 = Roles & Permissions Matrix, TAB-10 = Bank &
+      // SePay Webhook Config. The previous labels had the two swapped.
+      // Tabs are now also ordered TAB-09, TAB-10, TAB-11 as in the SRS.
+      const tab = ctx.query.tab || "permissions";
       const tabs = '<div class="tabs">' +
+        '<a class="tab ' + (tab === "permissions" ? "active" : "") + '" href="' + tabHref("permissions", "&role=Branch%20Manager") + '">TAB-09 · Phân quyền</a>' +
+        '<a class="tab ' + (tab === "sepay" ? "active" : "") + '" href="' + tabHref("sepay") + '">TAB-10 · SePay & thanh toán</a>' +
         '<a class="tab ' + (tab === "thresholds" ? "active" : "") + '" href="' + tabHref("thresholds") + '">TAB-11 · Ngưỡng phê duyệt</a>' +
-        '<a class="tab ' + (tab === "sepay" ? "active" : "") + '" href="' + tabHref("sepay") + '">TAB-09 · SePay & thanh toán</a>' +
-        '<a class="tab ' + (tab === "permissions" ? "active" : "") + '" href="' + tabHref("permissions", "&role=Branch%20Manager") + '">TAB-10 · Phân quyền</a>' +
         '<a class="tab ' + (tab === "security" ? "active" : "") + '" href="' + tabHref("security") + '">Bảo mật & phiên</a></div>';
       const pages = {
         thresholds: renderThresholds,
