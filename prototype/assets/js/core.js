@@ -982,6 +982,13 @@
     }
     tickClock();
     document.addEventListener("keydown", (event) => {
+      // SRS 5.2.1: F10 confirms a cash payment on the checkout screen.
+      if (NS.currentPath === "/pos/checkout" && event.key === "F10") {
+        event.preventDefault();
+        const btn = document.querySelector('[data-action="checkout-confirm-cash"]');
+        if (btn) btn.click();
+        return;
+      }
       if (NS.currentPath !== "/pos") return;
       if (event.key === "F1") { event.preventDefault(); const el = document.getElementById("pos-search"); if (el) el.focus(); }
       if (event.key === "F8") { event.preventDefault(); const el = document.getElementById("pos-voucher"); if (el) el.focus(); }
