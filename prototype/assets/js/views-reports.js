@@ -69,7 +69,58 @@
     }));
     const usage = Object.values(usageMap).sort((a, b) => b.qty * b.ingredient.unitCost - a.qty * a.ingredient.unitCost).slice(0, 8);
     const shiftRows = shifts.map((s) => ({ shift: s, stats: NS.calc.shiftStats(s) })).sort((a, b) => (a.shift.openedAt < b.shift.openedAt ? 1 : -1));
-    return { tab, range, branchId, all, orders, completed, revenue, cogs, refunds, discounts, cashOut, avg, margin, series, products, payMix, branchRows, usage, shiftRows, shifts };
+    // BR-47: cancel / refund rates, payment mix per shift, HR & labour, stock movement.
+    const cancelled = orders.filter((o) => o.status === "cancelled").length;
+    const refundOrders = orders.filter((o) => (o.refunds || []).some((rf) => rf.status === "completed"));
+    const payByShift = shiftRows.map((x) => {
+      const s = x.shift;
+      const list = orders.filter((o) => o.branchId === s.branchId && o.payment && o.payment.status === "completed" &&
+        o.createdAt >= s.openedAt && (!s.closedAt || o.createdAt <= s.closedAt));
+      const cash = list.filter((o) => o.payment.method === "cash").reduce((sum, o) => sum + NS.calc.orderNet(o), 0);
+      const qr = list.filter((o) => o.payment.method !== "cash").reduce((sum, o) => sum + NS.calc.orderNet(o), 0);
+      return { shift: s, cash, qr, total: cash + qr, count: list.length };
+    });
+    const hrRows = NS.data.employees.filter((e) => e.role !== "COO" && (all || e.branchId === branchId)).map((e) => {
+      const logs = NS.data.attendance.filter((a) => a.employeeId === e.id && a.workDate >= range.from && a.workDate <= range.to);
+      let hours = 0;
+      let open = 0;
+      logs.forEach((a) => {
+        if (a.checkIn && a.checkOut) hours += NS.calc.attendanceHours(a);
+        else if (a.checkIn && !a.checkOut) open += 1;
+      });
+      return {
+        employee: e,
+        days: logs.filter((a) => a.checkIn).length,
+        hours: Math.round(hours * 100) / 100,
+        late: logs.reduce((s, a) => s + (a.minutesLate || 0), 0),
+        early: logs.reduce((s, a) => s + (a.minutesEarly || 0), 0),
+        absent: logs.filter((a) => !a.checkIn).length,
+        open,
+        labor: Math.round(hours * (e.hourlyRate || 0)),
+      };
+    }).filter((r) => r.days > 0 || r.absent > 0).sort((a, b) => b.hours - a.hours);
+    const stockInRange = NS.data.stockTransactions.filter((s) => {
+      const day = (s.createdAt || "").slice(0, 10);
+      return day >= range.from && day <= range.to && (all || s.branchId === branchId);
+    });
+    const stockByType = ["inbound", "disposal", "stocktake"].map((t) => {
+      const list = stockInRange.filter((s) => s.type === t);
+      return { type: t, count: list.length, total: list.reduce((s, x) => s + (x.total || 0), 0) };
+    });
+    const stocktakeVariance = {};
+    stockInRange.filter((s) => s.type === "stocktake").forEach((s) => (s.items || []).forEach((line) => {
+      if (line.variance == null || line.variance === 0) return;
+      const ing = NS.get.ingredient(line.ingredientId);
+      if (!ing) return;
+      if (!stocktakeVariance[ing.id]) stocktakeVariance[ing.id] = { ingredient: ing, variance: 0, value: 0 };
+      stocktakeVariance[ing.id].variance += line.variance;
+      stocktakeVariance[ing.id].value += Math.abs(line.variance) * ing.unitCost;
+    }));
+    const stocktakeRows = Object.values(stocktakeVariance).sort((a, b) => b.value - a.value);
+    return { tab, range, branchId, all, orders, completed, revenue, cogs, refunds, discounts, cashOut, avg, margin, series, products, payMix, branchRows, usage, shiftRows, shifts,
+      cancelled, cancelRate: orders.length ? cancelled / orders.length * 100 : 0,
+      refundOrders: refundOrders.length, refundRate: completed.length ? refundOrders.length / completed.length * 100 : 0,
+      payByShift, hrRows, stockByType, stocktakeRows, hrLabor: hrRows.reduce((s, r) => s + r.labor, 0) };
   }
 
   NS.view("reports", {
@@ -111,6 +162,22 @@
           '<div class="panel"><div class="panel-head"><div><h2>Tiêu hao nguyên liệu</h2><p>Theo BOM của các đơn trong kỳ.</p></div></div>' +
           (r.usage.length ? '<div class="table-wrap"><table class="data"><thead><tr><th>Nguyên liệu</th><th class="num">Tiêu hao</th><th class="num">Giá trị ước tính</th></tr></thead><tbody>' +
             r.usage.map((u) => '<tr><td><div class="cell-title">' + esc(u.ingredient.name) + '</div><div class="cell-sub mono">' + esc(u.ingredient.code) + '</div></td><td class="num">' + NS.fmt.qty(u.qty) + " " + esc(u.ingredient.baseUnit) + '</td><td class="num">' + NS.fmt.currency(u.qty * u.ingredient.unitCost) + '</td></tr>').join("") + '</tbody></table></div>' : NS.ui.empty("Chưa có tiêu hao", "Chưa có đơn hàng trong kỳ.")) + '</div></div>' +
+          '<div class="grid-2 mt-24"><div class="panel"><div class="panel-head"><div><h2>Tỷ lệ hủy & hoàn tiền</h2><p>BR-47 · Tính trên đơn phát sinh trong kỳ.</p></div></div>' +
+          '<div class="stat-line"><span>Đơn hủy</span><strong>' + r.cancelled + ' / ' + r.orders.length + ' đơn · ' + NS.fmt.percent(r.cancelRate) + '</strong></div>' +
+          '<div class="stat-line"><span>Đơn có hoàn tiền</span><strong>' + r.refundOrders + ' / ' + r.completed.length + ' đơn đã thanh toán · ' + NS.fmt.percent(r.refundRate) + '</strong></div>' +
+          '<div class="stat-line"><span>Tổng tiền hoàn</span><strong>' + NS.fmt.currency(r.refunds) + '</strong></div>' +
+          '<div class="notice mt-12"><span class="notice__icon">i</span><div>Đơn hủy không tính doanh thu. Đơn hoàn một phần vẫn giữ phần doanh thu chưa hoàn.</div></div></div>' +
+          '<div class="panel"><div class="panel-head"><div><h2>Thanh toán theo ca</h2><p>BR-47 · Doanh thu thuần theo ca quỹ trong kỳ.</p></div></div>' +
+          (r.payByShift.length ? '<div class="table-wrap"><table class="data"><thead><tr><th>Ca</th><th class="num">Tiền mặt</th><th class="num">VietQR</th><th class="num">Tổng</th></tr></thead><tbody>' +
+            r.payByShift.map((x) => '<tr><td><span class="mono">' + esc(x.shift.id) + '</span><div class="cell-sub">' + esc(NS.branchName(x.shift.branchId)) + ' · ' + x.count + ' đơn</div></td><td class="num">' + NS.fmt.currency(x.cash) + '</td><td class="num">' + NS.fmt.currency(x.qr) + '</td><td class="num strong">' + NS.fmt.currency(x.total) + '</td></tr>').join("") + '</tbody></table></div>' : NS.ui.empty("Chưa có ca quỹ", "Không có ca trong khoảng thời gian đã chọn.")) + '</div></div>' +
+          '<div class="panel mt-24"><div class="panel-head"><div><h2>Nhân sự & chi phí lao động theo ca</h2><p>BR-47 · Chỉ tính ca đã check-out. Ca chưa check-out được đếm riêng, không tính giờ.</p></div><span class="tag tag-neutral">Tổng ' + NS.fmt.currency(r.hrLabor) + '</span></div>' +
+          (r.hrRows.length ? '<div class="table-wrap"><table class="data"><thead><tr><th>Nhân viên</th><th class="num">Ngày công</th><th class="num">Tổng giờ</th><th class="num">Muộn (phút)</th><th class="num">Về sớm (phút)</th><th class="num">Vắng / chưa ra</th><th class="num">Lương/giờ</th><th class="num">Thành tiền</th></tr></thead><tbody>' +
+            r.hrRows.map((x) => '<tr><td><div class="cell-title">' + esc(x.employee.name) + '</div><div class="cell-sub mono">' + esc(x.employee.code) + ' · ' + esc(x.employee.role) + '</div></td><td class="num">' + x.days + '</td><td class="num">' + NS.fmt.qty(x.hours) + '</td><td class="num">' + x.late + '</td><td class="num">' + x.early + '</td><td class="num">' + x.absent + ' / ' + x.open + '</td><td class="num">' + NS.fmt.currency(x.employee.hourlyRate) + '</td><td class="num strong">' + NS.fmt.currency(x.labor) + '</td></tr>').join("") + '</tbody></table></div>' : NS.ui.empty("Chưa có chấm công", "Không có bản ghi chấm công trong kỳ.")) + '</div>' +
+          '<div class="panel mt-24"><div class="panel-head"><div><h2>Luân chuyển kho & hao hụt kiểm kê</h2><p>BR-47 · Phiếu kho trong kỳ. Hao hụt ở đây là chênh lệch kiểm kê (thực đếm − sổ sách), không phải hao hụt BR-52 vì prototype chưa có phiếu xuất kho ra quầy bar.</p></div></div>' +
+          '<div class="table-wrap"><table class="data"><thead><tr><th>Loại phiếu</th><th class="num">Số phiếu</th><th class="num">Giá trị</th></tr></thead><tbody>' +
+          r.stockByType.map((x) => '<tr><td>' + esc(x.type === "inbound" ? "Nhập kho" : x.type === "disposal" ? "Tiêu hủy" : "Kiểm kê") + '</td><td class="num">' + x.count + '</td><td class="num">' + NS.fmt.currency(x.total) + '</td></tr>').join("") + '</tbody></table></div>' +
+          (r.stocktakeRows.length ? '<div class="table-wrap mt-16"><table class="data"><thead><tr><th>Nguyên liệu lệch kiểm kê</th><th class="num">Chênh lệch</th><th class="num">Giá trị tuyệt đối</th></tr></thead><tbody>' +
+            r.stocktakeRows.map((x) => '<tr><td><div class="cell-title">' + esc(x.ingredient.name) + '</div><div class="cell-sub mono">' + esc(x.ingredient.code) + '</div></td><td class="num">' + (x.variance > 0 ? "+" : "") + NS.fmt.qty(x.variance) + " " + esc(x.ingredient.baseUnit) + '</td><td class="num">' + NS.fmt.currency(x.value) + '</td></tr>').join("") + '</tbody></table></div>' : '<div class="notice mt-12"><span class="notice__icon">i</span><div>Không có chênh lệch kiểm kê trong kỳ.</div></div>') + '</div>' +
           (isChain ? '<div class="panel mt-24"><div class="panel-head"><div><h2>So sánh chi nhánh</h2><p>Doanh thu, COGS và biên góp trong kỳ.</p></div></div><div class="table-wrap"><table class="data"><thead><tr><th>Chi nhánh</th><th>Quản lý</th><th class="num">Đơn</th><th class="num">Doanh thu</th><th class="num">COGS</th><th class="num">Lợi nhuận gộp</th><th class="num">Biên</th></tr></thead><tbody>' +
             r.branchRows.map((b) => '<tr><td><div class="cell-title">' + esc(b.branch.short) + '</div><div class="cell-sub mono">' + esc(b.branch.code) + '</div></td><td>' + esc(b.branch.manager) + '</td><td class="num">' + b.orders + '</td><td class="num">' + NS.fmt.currency(b.revenue) + '</td><td class="num">' + NS.fmt.currency(b.cogs) + '</td><td class="num strong">' + NS.fmt.currency(b.gross) + '</td><td class="num">' + NS.fmt.percent(b.margin) + '</td></tr>').join("") + '</tbody></table></div></div>' +
             '<div class="panel mt-24"><div class="panel-head"><div><h2>Tăng trưởng theo quý</h2><p>Dữ liệu lịch sử mô phỏng toàn chuỗi.</p></div></div><div class="table-wrap"><table class="data"><thead><tr><th>Quý</th><th class="num">Doanh thu</th><th class="num">Đơn</th><th class="num">Tăng trưởng</th></tr></thead><tbody>' +
