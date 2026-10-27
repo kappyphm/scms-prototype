@@ -300,6 +300,22 @@
     if (!rows.length) { NS.toast("Vui lòng chọn ít nhất một nguyên liệu.", "error"); return; }
     const b = NS.branch();
     const user = NS.currentUser();
+    // BR-42: disposal quantity must not exceed available stock in the branch.
+    // Check the summed quantity per ingredient, so duplicate lines in one
+    // slip cannot bypass the limit either.
+    if (type === "disposal") {
+      const totalsByIngredient = {};
+      rows.forEach((row) => { totalsByIngredient[row.ingredientId] = (totalsByIngredient[row.ingredientId] || 0) + Number(row.baseQty || 0); });
+      for (let i = 0; i < rows.length; i++) {
+        const ing = NS.get.ingredient(rows[i].ingredientId);
+        if (!ing) continue;
+        const onHand = NS.calc.ingredientOnHand(ing, b.id);
+        if (totalsByIngredient[ing.id] > onHand) {
+          NS.toast("Tiêu hủy " + ing.name + " vượt tồn khả dụng: cần " + NS.fmt.qty(totalsByIngredient[ing.id]) + " " + ing.baseUnit + ", chỉ còn " + NS.fmt.qty(onHand) + " " + ing.baseUnit + ".", "error");
+          return;
+        }
+      }
+    }
     const items = [];
     let total = 0;
     for (let i = 0; i < rows.length; i++) {
